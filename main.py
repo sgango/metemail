@@ -33,6 +33,7 @@ def env_setup():
 
 def get_weather(loc):
     """Fetch weather data from Meteorologisk Institutt."""
+    #TODO: get the pollen count: https://api.weather.mg/api-detail-pages/air-quality-parameter.html
     url = (f"https://api.met.no/weatherapi/locationforecast/"
         f"2.0/compact?lat={loc.latitude}&lon={loc.longitude}")
     with urllib.request.urlopen(url) as fp:
