@@ -11,7 +11,7 @@ import smtplib  # send emails
 import ssl  # network stuff
 import urllib.request  # fetch file from url
 import geopy  # turn location into lat/long
-import pandas as pd  # data handling and plotting
+import matplotlib.pyplot as plt  # plotting
 from geopy.geocoders import Nominatim
 
 
@@ -63,19 +63,26 @@ def send_email(precipitation, loc, email, password, recipient):
         server.sendmail(email, recipient, msg)
 
 
-def plot_precip(forecast):
+def meteogram(forecast):
     """Read datetime and precipitation values
     from dictionary, and plot line graph.
     Gets rainfall per hour for next 48 hours.
     """
-    # FAILED ATTEMPT (list comprehension):
-#    times = [i["time"]
-#        for i in forecast["properties"]["timeseries"]]
-#    precipvals = [i["data"]["next_1_hours"]["details"]["precipitation_amount"]
-#        for i in forecast["properties"]["timeseries"]]
-#        for i in forecast.get("properties", {}).get("timeseries", {})]
-#    print(times)
-#    print(precipvals)
+    times = []
+    precip = []
+    temps = []
+    for i in range(49):
+        times.append(forecast["properties"]["timeseries"][i]["time"])
+        precip.append((forecast["properties"]["timeseries"][i]["data"]
+            ["next_1_hours"]["details"]["precipitation_amount"]))
+        temps.append((forecast["properties"]["timeseries"][i]["data"]
+            ["instant"]["details"]["air_temperature"]))
+    
+    plt.bar(times, precip)
+    plt.plot(times, temps, color='red')
+    plt.title("Meteogram for next 48 hours")
+    plt.xticks(rotation=90)
+    plt.show()
 
 
 if __name__ == "__main__":
@@ -83,4 +90,4 @@ if __name__ == "__main__":
     precipitation, forecast = get_weather(loc)
 #    if precipitation > 0:
 #        send_email(precipitation, loc, email, password, recipient)
-    plot_precip(forecast)
+    meteogram(forecast)
