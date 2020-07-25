@@ -11,47 +11,76 @@ import smtplib  # send emails
 import ssl  # network stuff
 import urllib.request  # fetch file from url
 import geopy  # turn location into lat/long
+import pandas as pd  # data handling and plotting
 from geopy.geocoders import Nominatim
+
 
 def env_setup():
     """Get parameters from environment variables,
     else get them from stdin.
     """
-    # email-sending parameters
+    # EMAIL PARAMETERS
     email = (os.environ["EMAIL"] if "EMAIL" in os.environ 
         else input("Log in to send an email.\nEmail: "))
+
     password = (os.environ["PASSWORD"] if "PASSWORD" in os.environ 
         else getpass.getpass(prompt='Password: '))
+
     recipient = (os.environ["RECIPIENT"] if "RECIPIENT" in os.environ 
         else input("Recipient email: "))
-    # convert location to lat-long
+
+    # CONVERT LOCATION TO LATITUDE/LONGITUDE
     locationstring = (os.environ["LOCATION"] if "LOCATION" in os.environ 
         else input("Location: "))
     locator = Nominatim(user_agent="myGeocoder")
     loc = locator.geocode(locationstring)
+
     return email, password, recipient, loc
 
+
 def get_weather(loc):
-    """Fetch weather data from Meteorologisk Institutt."""
+    """Fetch weather data from Meteorologisk Institutt.
+    """
     url = (f"https://api.met.no/weatherapi/locationforecast/"
         f"2.0/compact?lat={loc.latitude}&lon={loc.longitude}")
     with urllib.request.urlopen(url) as fp:
         forecast = json.load(fp)
         precipitation = (forecast["properties"]["timeseries"][0]["data"]
             ["next_6_hours"]["details"]["precipitation_amount"])
-        return precipitation
+        return precipitation, forecast
+
 
 def send_email(precipitation, loc, email, password, recipient):
-    """Log into server and send an email with precipitation forecast."""
+    """Log into server and send an email with precipitation forecast.
+    """
     msg = (f"Subject: Don\'t forget your umbrella!\n"
-        f"\n{precipitation}mm of precipitation is forecast in {loc.address}.")
+        f"\n{precipitation}mm of precipitation is forecast in {loc.address}"
+        f" in the next six hours.")
+
     context = ssl.create_default_context()
     with smtplib.SMTP_SSL("smtp.gmail.com", context=context) as server:
         server.login(email, password)
         server.sendmail(email, recipient, msg)
 
+
+def plot_precip(forecast):
+    """Read datetime and precipitation values
+    from dictionary, and plot line graph.
+    Gets rainfall per hour for next 48 hours.
+    """
+    # FAILED ATTEMPT (list comprehension):
+#    times = [i["time"]
+#        for i in forecast["properties"]["timeseries"]]
+#    precipvals = [i["data"]["next_1_hours"]["details"]["precipitation_amount"]
+#        for i in forecast["properties"]["timeseries"]]
+#        for i in forecast.get("properties", {}).get("timeseries", {})]
+#    print(times)
+#    print(precipvals)
+
+
 if __name__ == "__main__":
-    email, password, recipient, location = env_setup()
-    precipitation = get_weather(location)
-    if precipitation > 0:
-        send_email(precipitation, location, email, password, recipient)
+    email, password, recipient, loc = env_setup()
+    precipitation, forecast = get_weather(loc)
+#    if precipitation > 0:
+#        send_email(precipitation, loc, email, password, recipient)
+    plot_precip(forecast)
