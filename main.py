@@ -69,12 +69,12 @@ def meteogram(forecast, locationstring):
             ["instant"]["details"]["air_temperature"]))
     
     fig, ax1 = plt.subplots()
-    ax1.plot(times, temps, color='red')    
-    ax1.set_ylabel('Temperature (Celsius)', color='red')
+    ax1.bar(times, precip, color='blue')
+    ax1.set_ylabel('Precipitation (mm)', color='blue')
 
     ax2 = ax1.twinx()  # new set of axes, shared x-axis
-    ax2.bar(times, precip, color='blue')
-    ax2.set_ylabel('Precipitation (mm)', color='blue')
+    ax2.plot(times, temps, color='red')    
+    ax2.set_ylabel('Temperature (Celsius)', color='red')
 
     ax1.set_xlabel('Time')
     for lbl in ax1.axes.xaxis.get_ticklabels()[::2]:
