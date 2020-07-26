@@ -5,19 +5,19 @@ Adapted from MIT-licensed code by Mark Woodbridge
 """
 
 import getpass  # for secure password retrieval
-import json  # convert json to python dict
+import json  # handling JSON file from met.no
 import os  # access environment variables
 import smtplib  # send emails
-import ssl  # network stuff
+import ssl  # network stuff (for emails)
 import urllib.request  # fetch file from url
-import geopy  # turn location into lat/long
+import geopy  # geocoding (get coordinates of locations)
 import matplotlib.pyplot as plt  # plotting
 from geopy.geocoders import Nominatim
 
 
 def env_setup():
-    """Get parameters from environment variables,
-    else get them from stdin.
+    """Get parameters from environment variables if present,
+    otherwise get them from stdin.
     """
     # EMAIL PARAMETERS
     email = (os.environ["EMAIL"] if "EMAIL" in os.environ 
@@ -29,11 +29,11 @@ def env_setup():
     recipient = (os.environ["RECIPIENT"] if "RECIPIENT" in os.environ 
         else input("Recipient email: "))
 
-    # CONVERT LOCATION TO LATITUDE/LONGITUDE
+    # LOCATION SETTING
     locationstring = (os.environ["LOCATION"] if "LOCATION" in os.environ 
         else input("Location: "))
-    locator = Nominatim(user_agent="myGeocoder")
-    loc = locator.geocode(locationstring)
+    locator = Nominatim(user_agent="github:sgango/whatever-the-weather")
+    loc = locator.geocode(locationstring)  # find place and get coordinates
 
     return email, password, recipient, loc
 
@@ -43,11 +43,45 @@ def get_weather(loc):
     """
     url = (f"https://api.met.no/weatherapi/locationforecast/"
         f"2.0/compact?lat={loc.latitude}&lon={loc.longitude}")
+
     with urllib.request.urlopen(url) as fp:
-        forecast = json.load(fp)
+        forecast = json.load(fp)  # convert JSON to Python dictionary
         precipitation = (forecast["properties"]["timeseries"][0]["data"]
             ["next_6_hours"]["details"]["precipitation_amount"])
-        return precipitation, forecast
+
+    return precipitation, forecast
+
+
+def meteogram(forecast):
+    """Read datetime and precip/temp values
+    from dictionary, and plot meteogram.
+    Gets weather for next 24 hours.
+    """
+    times = []
+    precip = []
+    temps = []
+    for i in range(24):
+        # iterate through dict, get vals from first 24 timeseries
+        times.append(forecast["properties"]["timeseries"][i]["time"])
+        precip.append((forecast["properties"]["timeseries"][i]["data"]
+            ["next_1_hours"]["details"]["precipitation_amount"]))
+        temps.append((forecast["properties"]["timeseries"][i]["data"]
+            ["instant"]["details"]["air_temperature"]))
+    
+    fig, ax1 = plt.subplots()
+    ax1.plot(times, temps, color='red')    
+    ax1.set_xlabel('Hours from now')
+    ax1.set_ylabel('Temperature (Celsius)', color='red')
+    for lbl in ax1.axes.xaxis.get_ticklabels()[::2]:
+        lbl.set_visible(False)  # hide alternate labels for neatness
+
+    ax2 = ax1.twinx()  # new set of axes, shared x-axis
+    ax2.bar(times, precip, color='blue')
+    ax2.set_xticklabels(list(range(24)))  # numbers instead of full datetime
+    ax2.set_ylabel('Precipitation (mm)', color='blue')
+    fig.tight_layout()  # make sure everything fits nicely
+    plt.title("Meteogram for next 24 hours")
+    plt.show()  # FOR DEVELOPMENT ONLY
 
 
 def send_email(precipitation, loc, email, password, recipient):
@@ -60,29 +94,8 @@ def send_email(precipitation, loc, email, password, recipient):
     context = ssl.create_default_context()
     with smtplib.SMTP_SSL("smtp.gmail.com", context=context) as server:
         server.login(email, password)
+        # TODO: save meteogram and attach to email
         server.sendmail(email, recipient, msg)
-
-
-def meteogram(forecast):
-    """Read datetime and precipitation values
-    from dictionary, and plot line graph.
-    Gets rainfall per hour for next 48 hours.
-    """
-    times = []
-    precip = []
-    temps = []
-    for i in range(49):
-        times.append(forecast["properties"]["timeseries"][i]["time"])
-        precip.append((forecast["properties"]["timeseries"][i]["data"]
-            ["next_1_hours"]["details"]["precipitation_amount"]))
-        temps.append((forecast["properties"]["timeseries"][i]["data"]
-            ["instant"]["details"]["air_temperature"]))
-    
-    plt.bar(times, precip)
-    plt.plot(times, temps, color='red')
-    plt.title("Meteogram for next 48 hours")
-    plt.xticks(rotation=90)
-    plt.show()
 
 
 if __name__ == "__main__":
@@ -90,4 +103,4 @@ if __name__ == "__main__":
     precipitation, forecast = get_weather(loc)
 #    if precipitation > 0:
 #        send_email(precipitation, loc, email, password, recipient)
-    meteogram(forecast)
+    meteogram(forecast)  # FOR DEVELOPMENT ONLY
