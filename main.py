@@ -12,7 +12,10 @@ import ssl  # network stuff (for emails)
 import urllib.request  # fetch file from url
 import geopy  # geocoding (get coordinates of locations)
 import matplotlib.pyplot as plt  # plotting
-from geopy.geocoders import Nominatim
+from geopy.geocoders import Nominatim  # specific geocoder
+from email.mime.text import MIMEText
+from email.mime.image import MIMEImage
+from email.mime.multipart import MIMEMultipart
 
 
 def env_setup():
@@ -83,26 +86,33 @@ def meteogram(forecast, locationstring):
     ax1.set_xticklabels(hours)  # use hours only for x-labels
     fig.tight_layout()  # make sure everything fits nicely
     plt.title(f"Today's meteogram for {locationstring}")
-    plt.show()  # FOR DEVELOPMENT ONLY
+    plt.savefig('meteo.png', dpi=1000)
 
 
 def send_email(precipitation, loc, email, password, recipient):
     """Log into server and send an email with precipitation forecast.
     """
-    msg = (f"Subject: Don\'t forget your umbrella!\n"
-        f"\n{precipitation}mm of precipitation is forecast in {loc.address}"
-        f" in the next six hours.")
+    img_data = open('meteo.png', 'rb').read()
+    msg = MIMEMultipart()
+    msg['Subject'] = "Weather report"
+    msg['From'] = email
+    msg['To'] = recipient
+    text = MIMEText(f"\n{precipitation}mm of precipitation is forecast "
+        f"in {loc.address} in the next six hours.")
+    msg.attach(text)
+    image = MIMEImage(img_data, name='meteo.png')
+    msg.attach(image)
 
     context = ssl.create_default_context()
     with smtplib.SMTP_SSL("smtp.gmail.com", context=context) as server:
         server.login(email, password)
-        # TODO: save meteogram and attach to email
-        server.sendmail(email, recipient, msg)
+        server.sendmail(email, recipient, msg.as_string())
+        server.quit()
 
 
 if __name__ == "__main__":
     email, password, recipient, loc, locationstring = env_setup()
     precipitation, forecast = get_weather(loc)
+    meteogram(forecast, locationstring)
     if precipitation > 0:
         send_email(precipitation, loc, email, password, recipient)
-    meteogram(forecast, locationstring)  # FOR DEVELOPMENT ONLY
