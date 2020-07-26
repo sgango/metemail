@@ -15,6 +15,6 @@ jobs:
         with:
           python-version: "3.x"
       - run: |
-          pip install geopy
+          pip install geopy matplotlib
           python main.py
         if: ${{ env.EMAIL }}
