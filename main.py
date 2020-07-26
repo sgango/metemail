@@ -33,9 +33,9 @@ def env_setup():
     locationstring = (os.environ["LOCATION"] if "LOCATION" in os.environ 
         else input("Location: "))
     locator = Nominatim(user_agent="github:sgango/whatever-the-weather")
-    loc = locator.geocode(locationstring)  # find place and get coordinates
-
-    return email, password, recipient, loc
+    loc = locator.geocode(locationstring)  # find place and get coordinates    
+    
+    return email, password, recipient, loc, locationstring
 
 
 def get_weather(loc):
@@ -52,7 +52,7 @@ def get_weather(loc):
     return precipitation, forecast
 
 
-def meteogram(forecast):
+def meteogram(forecast, locationstring):
     """Read datetime and precip/temp values
     from dictionary, and plot meteogram.
     Gets weather for next 24 hours.
@@ -70,17 +70,19 @@ def meteogram(forecast):
     
     fig, ax1 = plt.subplots()
     ax1.plot(times, temps, color='red')    
-    ax1.set_xlabel('Hours from now')
     ax1.set_ylabel('Temperature (Celsius)', color='red')
-    for lbl in ax1.axes.xaxis.get_ticklabels()[::2]:
-        lbl.set_visible(False)  # hide alternate labels for neatness
 
     ax2 = ax1.twinx()  # new set of axes, shared x-axis
     ax2.bar(times, precip, color='blue')
-    ax2.set_xticklabels(list(range(24)))  # numbers instead of full datetime
     ax2.set_ylabel('Precipitation (mm)', color='blue')
+
+    ax1.set_xlabel('Time')
+    for lbl in ax1.axes.xaxis.get_ticklabels()[::2]:
+        lbl.set_visible(False)  # hide alternate labels for neatness
+    hours = [i[11:13] for i in times]  # slice datetime strings
+    ax1.set_xticklabels(hours)  # use hours only for x-labels
     fig.tight_layout()  # make sure everything fits nicely
-    plt.title("Meteogram for next 24 hours")
+    plt.title(f"Today's meteogram for {locationstring}")
     plt.show()  # FOR DEVELOPMENT ONLY
 
 
@@ -99,8 +101,8 @@ def send_email(precipitation, loc, email, password, recipient):
 
 
 if __name__ == "__main__":
-    email, password, recipient, loc = env_setup()
+    email, password, recipient, loc, locationstring = env_setup()
     precipitation, forecast = get_weather(loc)
-#    if precipitation > 0:
-#        send_email(precipitation, loc, email, password, recipient)
-    meteogram(forecast)  # FOR DEVELOPMENT ONLY
+    if precipitation > 0:
+        send_email(precipitation, loc, email, password, recipient)
+    meteogram(forecast, locationstring)  # FOR DEVELOPMENT ONLY
