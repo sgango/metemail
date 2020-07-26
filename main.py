@@ -5,53 +5,114 @@ Adapted from MIT-licensed code by Mark Woodbridge
 """
 
 import getpass  # for secure password retrieval
-import json  # convert json to python dict
+import json  # handling JSON file from met.no
 import os  # access environment variables
 import smtplib  # send emails
-import ssl  # network stuff
+import ssl  # network stuff (for emails)
 import urllib.request  # fetch file from url
-import geopy  # turn location into lat/long
-from geopy.geocoders import Nominatim
+import geopy  # geocoding (get coordinates of locations)
+import matplotlib.pyplot as plt  # plotting
+from geopy.geocoders import Nominatim  # specific geocoder
+from email.mime.text import MIMEText
+from email.mime.image import MIMEImage
+from email.mime.multipart import MIMEMultipart
+
 
 def env_setup():
-    """Get parameters from environment variables,
-    else get them from stdin.
+    """Get parameters from environment variables if present,
+    otherwise get them from stdin.
     """
-    # email-sending parameters
+    # EMAIL PARAMETERS
     email = (os.environ["EMAIL"] if "EMAIL" in os.environ 
         else input("Log in to send an email.\nEmail: "))
+
     password = (os.environ["PASSWORD"] if "PASSWORD" in os.environ 
         else getpass.getpass(prompt='Password: '))
+
     recipient = (os.environ["RECIPIENT"] if "RECIPIENT" in os.environ 
         else input("Recipient email: "))
-    # convert location to lat-long
+
+    # LOCATION SETTING
     locationstring = (os.environ["LOCATION"] if "LOCATION" in os.environ 
         else input("Location: "))
-    locator = Nominatim(user_agent="myGeocoder")
-    loc = locator.geocode(locationstring)
-    return email, password, recipient, loc
+    locator = Nominatim(user_agent="github:sgango/whatever-the-weather")
+    loc = locator.geocode(locationstring)  # find place and get coordinates    
+    
+    return email, password, recipient, loc, locationstring
+
 
 def get_weather(loc):
-    """Fetch weather data from Meteorologisk Institutt."""
+    """Fetch weather data from Meteorologisk Institutt.
+    """
     url = (f"https://api.met.no/weatherapi/locationforecast/"
         f"2.0/compact?lat={loc.latitude}&lon={loc.longitude}")
+
     with urllib.request.urlopen(url) as fp:
-        forecast = json.load(fp)
+        forecast = json.load(fp)  # convert JSON to Python dictionary
         precipitation = (forecast["properties"]["timeseries"][0]["data"]
             ["next_6_hours"]["details"]["precipitation_amount"])
-        return precipitation
+
+    return precipitation, forecast
+
+
+def meteogram(forecast, locationstring):
+    """Read datetime and precip/temp values
+    from dictionary, and plot meteogram.
+    Gets weather for next 24 hours.
+    """
+    times = []
+    precip = []
+    temps = []
+    for i in range(24):
+        # iterate through dict, get vals from first 24 timeseries
+        times.append(forecast["properties"]["timeseries"][i]["time"])
+        precip.append((forecast["properties"]["timeseries"][i]["data"]
+            ["next_1_hours"]["details"]["precipitation_amount"]))
+        temps.append((forecast["properties"]["timeseries"][i]["data"]
+            ["instant"]["details"]["air_temperature"]))
+    
+    fig, ax1 = plt.subplots()
+    ax1.bar(times, precip, color='blue')
+    ax1.set_ylabel('Precipitation (mm)', color='blue')
+
+    ax2 = ax1.twinx()  # new set of axes, shared x-axis
+    ax2.plot(times, temps, color='red')    
+    ax2.set_ylabel('Temperature (Celsius)', color='red')
+
+    ax1.set_xlabel('Time')
+    for lbl in ax1.axes.xaxis.get_ticklabels()[::2]:
+        lbl.set_visible(False)  # hide alternate labels for neatness
+    hours = [i[11:13] for i in times]  # slice datetime strings
+    ax1.set_xticklabels(hours)  # use hours only for x-labels
+    fig.tight_layout()  # make sure everything fits nicely
+    plt.title(f"Today's meteogram for {locationstring}")
+    plt.savefig('meteo.png', dpi=1000)
+
 
 def send_email(precipitation, loc, email, password, recipient):
-    """Log into server and send an email with precipitation forecast."""
-    msg = (f"Subject: Don\'t forget your umbrella!\n"
-        f"\n{precipitation}mm of precipitation is forecast in {loc.address}.")
+    """Log into server and send an email with precipitation forecast.
+    """
+    img_data = open('meteo.png', 'rb').read()
+    msg = MIMEMultipart()
+    msg['Subject'] = "Weather report"
+    msg['From'] = email
+    msg['To'] = recipient
+    text = MIMEText(f"\n{precipitation}mm of precipitation is forecast "
+        f"in {loc.address} in the next six hours.")
+    msg.attach(text)
+    image = MIMEImage(img_data, name='meteo.png')
+    msg.attach(image)
+
     context = ssl.create_default_context()
     with smtplib.SMTP_SSL("smtp.gmail.com", context=context) as server:
         server.login(email, password)
-        server.sendmail(email, recipient, msg)
+        server.sendmail(email, recipient, msg.as_string())
+        server.quit()
+
 
 if __name__ == "__main__":
-    email, password, recipient, location = env_setup()
-    precipitation = get_weather(location)
+    email, password, recipient, loc, locationstring = env_setup()
+    precipitation, forecast = get_weather(loc)
+    meteogram(forecast, locationstring)
     if precipitation > 0:
-        send_email(precipitation, location, email, password, recipient)
+        send_email(precipitation, loc, email, password, recipient)
