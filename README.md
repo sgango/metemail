@@ -19,6 +19,8 @@ Get a clear, concise forecast in your inbox every morning.
 In normal use, the environment variables `EMAIL`, `PASSWORD`, `RECIPIENT` and `LOCATION` should be set. The script can then run on a schedule, for example using GitHub Actions. For testing purposes, if the environment variables are not set, the script will prompt the user and read from standard input.  
 See [the original instructions](https://github.com/ImperialCollegeLondon/whatever-the-weather/blob/main/README.md) for more details.
 
+`LOCATION` should simply be a string referencing any location on Earth, such as `south kensington`. For common placenames, you may need to use a more precise string to select the intended location.
+
 ## Requirements
 
 Tested using:
