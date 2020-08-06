@@ -6,16 +6,20 @@
 **A simple Python app which sends a daily meteogram and emoji summary.**  
 Get a clear, concise forecast in your inbox every morning. 
 
-### Example email
+## Example email
 
 <img src="https://user-images.githubusercontent.com/25332542/89578548-35240300-d82a-11ea-9bbc-a3bad815c908.png" width="600">
 
-### Usage
+### Example meteogram
+
+<img src="https://user-images.githubusercontent.com/25332542/89579684-20486f00-d82c-11ea-975a-731bb0623f3f.png" width="600">
+
+## Usage
 
 In normal use, the environment variables `EMAIL`, `PASSWORD`, `RECIPIENT` and `LOCATION` should be set. The script can then run on a schedule, for example using GitHub Actions. For testing purposes, if the environment variables are not set, the script will prompt the user and read from standard input.  
 See [the original instructions](https://github.com/ImperialCollegeLondon/whatever-the-weather/blob/main/README.md) for more details.
 
-### Requirements
+## Requirements
 
 Tested using:
 
