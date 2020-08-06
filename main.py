@@ -9,13 +9,15 @@ import json  # handling JSON file from met.no
 import os  # access environment variables
 import smtplib  # send emails
 import ssl  # network stuff (for emails)
-import urllib.request  # fetch file from url
+from urllib.request import urlopen, Request  # fetch file from url
 import geopy  # geocoding (get coordinates of locations)
 import matplotlib.pyplot as plt  # plotting
 from geopy.geocoders import Nominatim  # specific geocoder
 from email.mime.text import MIMEText
 from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
+from symbolDict import symbols  # map of symbol names to emoji
+from statistics import mean  # to calculate mean
 
 
 def env_setup():
@@ -23,21 +25,21 @@ def env_setup():
     otherwise get them from stdin.
     """
     # EMAIL PARAMETERS
-    email = (os.environ["EMAIL"] if "EMAIL" in os.environ 
+    email = (os.environ["EMAIL"] if "EMAIL" in os.environ
         else input("Log in to send an email.\nEmail: "))
 
-    password = (os.environ["PASSWORD"] if "PASSWORD" in os.environ 
+    password = (os.environ["PASSWORD"] if "PASSWORD" in os.environ
         else getpass.getpass(prompt='Password: '))
 
-    recipient = (os.environ["RECIPIENT"] if "RECIPIENT" in os.environ 
+    recipient = (os.environ["RECIPIENT"] if "RECIPIENT" in os.environ
         else input("Recipient email: "))
 
     # LOCATION SETTING
-    locationstring = (os.environ["LOCATION"] if "LOCATION" in os.environ 
+    locationstring = (os.environ["LOCATION"] if "LOCATION" in os.environ
         else input("Location: "))
-    locator = Nominatim(user_agent="github:sgango/whatever-the-weather")
-    loc = locator.geocode(locationstring)  # find place and get coordinates    
-    
+    locator = Nominatim(user_agent="github:sgango/metemail")
+    loc = locator.geocode(locationstring)  # find place and get coordinates
+
     return email, password, recipient, loc, locationstring
 
 
@@ -47,12 +49,11 @@ def get_weather(loc):
     url = (f"https://api.met.no/weatherapi/locationforecast/"
         f"2.0/compact?lat={loc.latitude}&lon={loc.longitude}")
 
-    with urllib.request.urlopen(url) as fp:
+    with urlopen(Request(url,  # user agent to identify ourselves to met.no
+            headers={'User-Agent': 'github:sgango/metemail'})) as fp:
         forecast = json.load(fp)  # convert JSON to Python dictionary
-        precipitation = (forecast["properties"]["timeseries"][0]["data"]
-            ["next_6_hours"]["details"]["precipitation_amount"])
 
-    return precipitation, forecast
+    return forecast
 
 
 def meteogram(forecast, locationstring):
@@ -64,19 +65,19 @@ def meteogram(forecast, locationstring):
     precip = []
     temps = []
     for i in range(24):
-        # iterate through dict, get vals from first 24 timeseries
+        # iterate through dict, get values from first 24 timeseries
         times.append(forecast["properties"]["timeseries"][i]["time"])
         precip.append((forecast["properties"]["timeseries"][i]["data"]
             ["next_1_hours"]["details"]["precipitation_amount"]))
         temps.append((forecast["properties"]["timeseries"][i]["data"]
             ["instant"]["details"]["air_temperature"]))
-    
+
     fig, ax1 = plt.subplots()
     ax1.bar(times, precip, color='blue')
     ax1.set_ylabel('Precipitation (mm)', color='blue')
 
     ax2 = ax1.twinx()  # new set of axes, shared x-axis
-    ax2.plot(times, temps, color='red')    
+    ax2.plot(times, temps, color='red')
     ax2.set_ylabel('Temperature (Celsius)', color='red')
 
     ax1.set_xlabel('Time')
@@ -84,22 +85,91 @@ def meteogram(forecast, locationstring):
         lbl.set_visible(False)  # hide alternate labels for neatness
     hours = [i[11:13] for i in times]  # slice datetime strings
     ax1.set_xticklabels(hours)  # use hours only for x-labels
+
     fig.tight_layout()  # make sure everything fits nicely
-    plt.title(f"Today's meteogram for {locationstring}")
-    plt.savefig('meteo.png', dpi=1000)
+    plt.title(f"Today's meteogram for {locationstring.title()}")
+    plt.savefig('meteo.png', dpi=1000, bbox_inches='tight')
 
 
-def send_email(precipitation, loc, email, password, recipient):
-    """Log into server and send an email with precipitation forecast.
+def send_email(loc, email, password, recipient, forecast):
+    """Log into server and send an email with forecast.
     """
-    img_data = open('meteo.png', 'rb').read()
+    symbs = []
+    for i in range(6):
+        symbs.append((forecast["properties"]["timeseries"]
+            [i]["data"]["next_1_hours"]["summary"]["symbol_code"]))
+    emoji = [symbols[symbol] for symbol in symbs]
+
+    precipitation = (forecast["properties"]["timeseries"][0]["data"]
+        ["next_6_hours"]["details"]["precipitation_amount"])
+    if precipitation > 0:
+        precip_msg = (
+            f"Looks like it's going to rain! {precipitation} mm of "
+            f"precipitation is forecast."
+            )
+    else:
+        precip_msg = "Looks like it'll be dry! No rain is forecast."
+    
+    temps = []
+    for i in range(6):
+        temps.append((forecast["properties"]["timeseries"][i]["data"]
+            ["instant"]["details"]["air_temperature"]))
+    temp_mean = mean(temps)
+    if temp_mean < 0:
+        temp_phrase = "freezing ⛄"
+    elif 0 < temp_mean <= 5:
+        temp_phrase = "cold ❄"
+    elif 5 < temp_mean <= 10:
+        temp_phrase = "quite chilly"
+    elif 10 < temp_mean <= 15:
+        temp_phrase = "cool"
+    elif 15 < temp_mean <= 25:
+        temp_phrase = "warm"
+    elif 25 < temp_mean <= 32:
+        temp_phrase = "hot 🌞"
+    elif temp_mean > 32:
+        temp_phrase = "very hot 🥵"
+    else:
+        temp_phrase = ""
+    temp_msg = f"Avg. temperature: {temp_mean:.2f} \u00b0C - {temp_phrase}."
+
+    winds = []
+    for i in range(6):
+        winds.append((forecast["properties"]["timeseries"][i]["data"]
+            ["instant"]["details"]["wind_speed"]))
+    wind_mean = mean(winds)
+    wind_mean *= 2.237  # convert ms^-1 to mph
+    if 0 < wind_mean <= 3:
+        wind_phrase = "calm"
+    elif 3 < wind_mean <= 12:
+        wind_phrase = "a bit breezy 🍃"
+    elif 12 < wind_mean <= 24:
+        wind_phrase = "quite breezy 🍃"
+    elif 24 < wind_mean <= 38:
+        wind_phrase = "very strong winds 🌬"
+    elif wind_mean > 38:
+        wind_phrase = "extremely strong winds 🌬"
+    else:
+        wind_phrase = ""
+    wind_msg = f"Avg. windspeed: {wind_mean:.2f} mph - {wind_phrase}."
+
     msg = MIMEMultipart()
     msg['Subject'] = "Weather report"
     msg['From'] = email
     msg['To'] = recipient
-    text = MIMEText(f"\n{precipitation}mm of precipitation is forecast "
-        f"in {loc.address} in the next six hours.")
+
+    text = MIMEText(
+        f"Next six hours:\n{'  '.join(emoji)}\n\n"
+        f"{precip_msg}\n"
+        f"{temp_msg}\n"
+        f"{wind_msg}\n\n"
+        f"Check the attached meteogram for details.\n\n"
+        f"Location: {loc.address}\n"
+        f"Data from the Norwegian Meteorological Institute.\n"
+        )
     msg.attach(text)
+
+    img_data = open('meteo.png', 'rb').read()
     image = MIMEImage(img_data, name='meteo.png')
     msg.attach(image)
 
@@ -112,7 +182,6 @@ def send_email(precipitation, loc, email, password, recipient):
 
 if __name__ == "__main__":
     email, password, recipient, loc, locationstring = env_setup()
-    precipitation, forecast = get_weather(loc)
+    forecast = get_weather(loc)
     meteogram(forecast, locationstring)
-    if precipitation > 0:
-        send_email(precipitation, loc, email, password, recipient)
+    send_email(loc, email, password, recipient, forecast)
