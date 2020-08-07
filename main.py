@@ -17,7 +17,7 @@ from email.mime.text import MIMEText
 from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 from symbolDict import symbols  # map of symbol names to emoji
-from statistics import mean  # to calculate mean
+from statistics import mean
 
 
 def env_setup():
@@ -139,7 +139,7 @@ def send_email(loc, email, password, recipient, forecast):
             ["instant"]["details"]["wind_speed"]))
     wind_mean = mean(winds)
     wind_mean *= 2.237  # convert ms^-1 to mph
-    if 0 < wind_mean <= 3:
+    if 0 <= wind_mean <= 3:
         wind_phrase = "calm"
     elif 3 < wind_mean <= 12:
         wind_phrase = "a bit breezy 🍃"
